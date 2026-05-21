@@ -57,25 +57,20 @@ std::string NetworkHttpGet(const std::string& url) {
 /**
  * @brief Получает актуальную цену актива с биржи Binance (для крипты) или Finnhub (для акций).
  * @param ticker Символьный код актива (например, "BTC", "AAPL"). Регистронезависимый.
- * @param finnhubApiKey Ключ доступа к Finnhub API (требуется для получения стоимости акций).
  * @return Текущая цена актива в USD. Возвращает -1.0 в случае ошибки или если актив не поддерживается.
  */
-double GetAssetPrice(std::string ticker, const std::string& finnhubApiKey) {
+double GetAssetPrice(std::string ticker) {
 	// Приводим тикер к верхнему регистру (например, btc -> BTC)
 	std::transform(ticker.begin(), ticker.end(), ticker.begin(), ::toupper);
 
 	static const std::unordered_map<std::string, std::string> cryptoMap = {
 		{"BTC", "BTCUSDT"}, {"ETH", "ETHUSDT"}, {"BNB", "BNBUSDT"}, {"SOL", "SOLUSDT"}, {"XRP", "XRPUSDT"}
 	};
-	static const std::unordered_map<std::string, std::string> stockMap = {
-		{"AAPL", "AAPL"}, {"MSFT", "MSFT"}, {"GOOGL", "GOOGL"}, {"AMZN", "AMZN"}, {"NVDA", "NVDA"}
-	};
 
 	if (cryptoMap.find(ticker) != cryptoMap.end()) {
 		std::string symbol = cryptoMap.at(ticker);
 		std::string url = "https://api.binance.com/api/v3/ticker/price?symbol=" + symbol;
 		std::string res = NetworkHttpGet(url);
-
 		if (!res.empty()) {
 			try {
 				auto js = json::parse(res);
@@ -83,26 +78,6 @@ double GetAssetPrice(std::string ticker, const std::string& finnhubApiKey) {
 			}
 			catch (...) {
 				std::cerr << "Ошибка парсинга данных Binance для " << ticker << std::endl;
-			}
-		}
-	}
-	else if (stockMap.find(ticker) != stockMap.end()) {
-		if (finnhubApiKey.empty() || finnhubApiKey == "YOUR_API_KEY" || finnhubApiKey == "APIKEY") {
-			std::cerr << "Ошибка: Для получения акций нужен корректный Finnhub API Key!" << std::endl;
-			return -1.0;
-		}
-
-		std::string symbol = stockMap.at(ticker);
-		std::string url = "https://finnhub.io/api/v1/quote?symbol=" + symbol + "&token=" + finnhubApiKey;
-		std::string res = NetworkHttpGet(url);
-
-		if (!res.empty()) {
-			try {
-				auto js = json::parse(res);
-				return js["c"].get<double>();
-			}
-			catch (...) {
-				std::cerr << "Ошибка парсинга данных Finnhub для " << ticker << std::endl;
 			}
 		}
 	}
@@ -179,7 +154,6 @@ void print_portf() {
 	std::cout << "Активы на руках:\n";
 
 	float total_cost = 0; // Локальная переменная (исправлен баг бесконечного суммирования)
-	std::string current_key = "YOUR_API_KEY"; // Сюда нужно передавать реальный ключ для работы акций
 
 	for (const auto& pair : portfolio["Moneti"]) {
 		std::string coin = pair.first;
@@ -188,7 +162,7 @@ void print_portf() {
 			continue;
 		}
 		else {
-			double assetPrice = GetAssetPrice(coin, current_key);
+			double assetPrice = GetAssetPrice(coin);
 			if (assetPrice < 0) assetPrice = 0; // Защита, если цена не получена
 
 			total_cost += static_cast<float>(assetPrice * amount);
@@ -215,8 +189,7 @@ void buy_asset(std::string name, float quantity) {
 		return;
 	}
 
-	std::string current_key = "YOUR_API_KEY";
-	double price = GetAssetPrice(name, current_key);
+	double price = GetAssetPrice(name);
 
 	if (price <= 0) {
 		std::cout << "Не удалось получить цену актива для совершения сделки.\n\n";
@@ -253,8 +226,7 @@ void sell_asset(std::string name, float quantity) {
 	}
 
 	if (quantity <= portfolio["Moneti"][name]) {
-		std::string current_key = "YOUR_API_KEY";
-		double price = GetAssetPrice(name, current_key);
+		double price = GetAssetPrice(name);
 
 		if (price <= 0) {
 			std::cout << "Не удалось получить цену актива для совершения сделки.\n\n";
@@ -450,7 +422,6 @@ void LoadPortfolioFromFile(const std::string& filename) {
 int main() {
 	setlocale(LC_ALL, "RU");
 	short xray = 0;
-	std::string my_key = "YOUR_API_KEY"; // Укажи сюда свой токен Finnhub, чтобы чекать цену акций
 
 	// Цикл чтобы возвращаться в главное меню
 	while (xray < 10000) {
@@ -484,7 +455,7 @@ int main() {
 		case 2:
 			std::cout << "Введите название валюты/акции:\n";
 			std::cin >> name;
-			std::cout << "Цена на данный момент: " << GetAssetPrice(name, my_key) << "$" << std::endl << std::endl;
+			std::cout << "Цена на данный момент: " << GetAssetPrice(name) << "$" << std::endl << std::endl;
 			std::this_thread::sleep_for(std::chrono::seconds(2));
 			continue;
 
