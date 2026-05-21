@@ -16,14 +16,25 @@
 
 using json = nlohmann::json;
 
-// Коллбэк для записи ответа от cURL в строку
+/**
+ * @brief Функция-колбэк для записи входящих данных от cURL в строку.
+ * @param contents Указатель на полученные данные.
+ * @param size Размер одного элемента данных.
+ * @param nmemb Количество элементов.
+ * @param userp Указатель на целевую строку std::string, куда записывается ответ.
+ * @return Количество обработанных байт.
+ */
 size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* userp) {
 	size_t totalSize = size * nmemb;
 	userp->append((char*)contents, totalSize);
 	return totalSize;
 }
 
-// Вспомогательная функция для HTTP GET запросов
+/**
+ * @brief Выполняет сетевой HTTP GET запрос.
+ * @param url Целевой URL-адрес для отправки запроса.
+ * @return Ответ сервера в виде строки (обычно JSON). При ошибке возвращает пустую строку.
+ */
 std::string NetworkHttpGet(const std::string& url) {
 	CURL* curl = curl_easy_init();
 	std::string response;
@@ -43,11 +54,15 @@ std::string NetworkHttpGet(const std::string& url) {
 	return response;
 }
 
-
+/**
+ * @brief Получает актуальную цену актива с биржи Binance (для крипты) или Finnhub (для акций).
+ * @param ticker Символьный код актива (например, "BTC", "AAPL"). Регистронезависимый.
+ * @param finnhubApiKey Ключ доступа к Finnhub API (требуется для получения стоимости акций).
+ * @return Текущая цена актива в USD. Возвращает -1.0 в случае ошибки или если актив не поддерживается.
+ */
 double GetAssetPrice(std::string ticker, const std::string& finnhubApiKey) {
 	// Приводим тикер к верхнему регистру (например, btc -> BTC)
 	std::transform(ticker.begin(), ticker.end(), ticker.begin(), ::toupper);
-
 
 	static const std::unordered_map<std::string, std::string> cryptoMap = {
 		{"BTC", "BTCUSDT"}, {"ETH", "ETHUSDT"}, {"BNB", "BNBUSDT"}, {"SOL", "SOLUSDT"}, {"XRP", "XRPUSDT"}
@@ -64,7 +79,6 @@ double GetAssetPrice(std::string ticker, const std::string& finnhubApiKey) {
 		if (!res.empty()) {
 			try {
 				auto js = json::parse(res);
-				// Binance возвращает цену как строку "65230.10", переводим в double
 				return std::stod(js["price"].get<std::string>());
 			}
 			catch (...) {
@@ -73,7 +87,7 @@ double GetAssetPrice(std::string ticker, const std::string& finnhubApiKey) {
 		}
 	}
 	else if (stockMap.find(ticker) != stockMap.end()) {
-		if (finnhubApiKey.empty() || finnhubApiKey == "YOUR_API_KEY") {
+		if (finnhubApiKey.empty() || finnhubApiKey == "YOUR_API_KEY" || finnhubApiKey == "APIKEY") {
 			std::cerr << "Ошибка: Для получения акций нужен корректный Finnhub API Key!" << std::endl;
 			return -1.0;
 		}
@@ -85,7 +99,6 @@ double GetAssetPrice(std::string ticker, const std::string& finnhubApiKey) {
 		if (!res.empty()) {
 			try {
 				auto js = json::parse(res);
-				// Поле "c" в Finnhub — это Current Price (текущая цена) в формате числа
 				return js["c"].get<double>();
 			}
 			catch (...) {
@@ -100,31 +113,21 @@ double GetAssetPrice(std::string ticker, const std::string& finnhubApiKey) {
 	return -1.0;
 }
 
-
-
-
-
-//Создаем портфолио
+// Глобальная структура портфеля пользователя
 std::unordered_map<std::string, std::unordered_map<std::string, float>> portfolio = {
 	{"Balance", {{"amount", 10000.0f}}},
 	{"Moneti", {
-		{"BTC", 0.0f},
-		{"ETH", 0.0f},
-		{"BNB", 0.0f},
-		{"SOL", 0.0f},
-		{"XRP", 0.0f},
-		{"AAPL", 0.0f},
-		{"MSFT", 0.0f},
-		{"GOOGL", 0.0f},
-		{"AMZN", 0.0f},
-		{"NVDA", 0.0f},
+		{"BTC", 0.0f}, {"ETH", 0.0f}, {"BNB", 0.0f}, {"SOL", 0.0f}, {"XRP", 0.0f}
 	}}
 };
 
+std::vector<std::string> history; // Вектор для хранения истории операций
+std::string entry;               // Буферная строка для формирования записи истории
 
-std::vector<std::string> history;
-std::string entry;
-
+/**
+ * @brief Получает текущее системное время на компьютере.
+ * @return Строка с датой и временем в формате "ДД.ММ.ГГГГ ЧЧ:ММ:СС".
+ */
 std::string get_real_time() {
 	time_t now = time(0);
 	struct tm buf;
@@ -136,21 +139,23 @@ std::string get_real_time() {
 	return std::string(buffer);
 }
 
+/**
+ * @brief Выводит на экран всю историю финансовых операций пользователя.
+ */
 void print_history() {
-
 	std::cout << "\n=== ИСТОРИЯ ОПЕРАЦИЙ ===\n";
 	std::cout << "Всего записей: " << history.size() << "\n\n";
 
 	for (const auto& entry : history) {
 		std::cout << "• " << entry << "\n";
 	}
-
 	std::cout << "\n=== КОНЕЦ ИСТОРИИ ===\n";
 }
 
-
-
-
+/**
+ * @brief Изменяет баланс свободных фиатных средств (USD) пользователя.
+ * @param summa Сумма изменения (может быть отрицательной для списания средств).
+ */
 void balance_change(int summa) {
 	if (portfolio["Balance"]["amount"] + summa >= 0) {
 		portfolio["Balance"]["amount"] += summa;
@@ -165,14 +170,17 @@ void balance_change(int summa) {
 	}
 }
 
-
-float total_cost = 0;
-
+/**
+ * @brief Выводит состав текущего портфеля, баланс и общую ценность всех активов по рыночному курсу.
+ */
 void print_portf() {
 	std::cout << "\n=== ТЕКУЩИЙ ПОРТФЕЛЬ ===\n";
 	std::cout << "Баланс: " << portfolio["Balance"]["amount"] << "$\n\n";
-	std::cout << "Акции:\n";
-	
+	std::cout << "Активы на руках:\n";
+
+	float total_cost = 0; // Локальная переменная (исправлен баг бесконечного суммирования)
+	std::string current_key = "YOUR_API_KEY"; // Сюда нужно передавать реальный ключ для работы акций
+
 	for (const auto& pair : portfolio["Moneti"]) {
 		std::string coin = pair.first;
 		float amount = pair.second;
@@ -180,34 +188,47 @@ void print_portf() {
 			continue;
 		}
 		else {
-			total_cost += GetAssetPrice(coin, "APIKEY") * amount;
-			std::cout << "  " << coin << ": " << amount << " шт.    " << GetAssetPrice(coin, "APIKEY") * amount << "$\n\n";
+			double assetPrice = GetAssetPrice(coin, current_key);
+			if (assetPrice < 0) assetPrice = 0; // Защита, если цена не получена
+
+			total_cost += static_cast<float>(assetPrice * amount);
+			std::cout << "  " << coin << ": " << amount << " шт.    " << assetPrice * amount << "$\n";
 		}
 	}
 	total_cost += portfolio["Balance"]["amount"];
-	std::cout << "Общая стоимость портфеля: " << total_cost << "$\n";
-
+	std::cout << "\nОбщая стоимость портфеля: " << total_cost << "$\n";
 	std::cout << "========================\n\n";
 }
 
-
-
+/**
+ * @brief Покупка определенного количества акций или криптовалюты.
+ * @param name Тикер покупаемого актива.
+ * @param quantity Количество единиц к покупке.
+ */
 void buy_asset(std::string name, float quantity) {
+	std::transform(name.begin(), name.end(), name.begin(), ::toupper);
 	try {
-		float currentAmount = portfolio["Moneti"].at(name); // Выбросит исключение, если нет ключа
-		// Если дошли сюда - монета существует
+		float currentAmount = portfolio["Moneti"].at(name);
 	}
 	catch (const std::out_of_range&) {
 		std::cout << "Ошибка: Актив '" << name << "' не поддерживается!\n\n";
 		return;
 	}
 
-	if (GetAssetPrice(name, "APIKEY") * quantity <= portfolio["Balance"]["amount"]) {
-		portfolio["Balance"]["amount"] -= GetAssetPrice(name, "APIKEY") * quantity;
+	std::string current_key = "YOUR_API_KEY";
+	double price = GetAssetPrice(name, current_key);
+
+	if (price <= 0) {
+		std::cout << "Не удалось получить цену актива для совершения сделки.\n\n";
+		return;
+	}
+
+	if (price * quantity <= portfolio["Balance"]["amount"]) {
+		portfolio["Balance"]["amount"] -= static_cast<float>(price * quantity);
 		portfolio["Moneti"][name] += quantity;
-		std::cout << "Приобретено " << quantity << " акций " << name << " за " << GetAssetPrice(name, "APIKEY") * quantity << "$" << std::endl;
+		std::cout << "Приобретено " << quantity << " ед. " << name << " за " << price * quantity << "$" << std::endl;
 		std::cout << "Текущий баланс: " << portfolio["Balance"]["amount"] << "$" << std::endl << std::endl;
-		entry = "Покупка " + std::to_string(quantity) + " " + name + " за " + std::to_string(GetAssetPrice(name, "APIKEY") * quantity) + "$" + " | " + get_real_time();
+		entry = "Покупка " + std::to_string(quantity) + " " + name + " за " + std::to_string(price * quantity) + "$" + " | " + get_real_time();
 		history.push_back(entry);
 		entry = "";
 	}
@@ -216,12 +237,15 @@ void buy_asset(std::string name, float quantity) {
 	}
 }
 
-
+/**
+ * @brief Продажа имеющегося актива из портфеля.
+ * @param name Тикер продаваемого актива.
+ * @param quantity Количество единиц к продаже.
+ */
 void sell_asset(std::string name, float quantity) {
-
+	std::transform(name.begin(), name.end(), name.begin(), ::toupper);
 	try {
-		float currentAmount = portfolio["Moneti"].at(name); // Выбросит исключение, если нет ключа
-		// Если дошли сюда - монета существует
+		float currentAmount = portfolio["Moneti"].at(name);
 	}
 	catch (const std::out_of_range&) {
 		std::cout << "Ошибка: Актив '" << name << "' не поддерживается!\n\n";
@@ -229,21 +253,34 @@ void sell_asset(std::string name, float quantity) {
 	}
 
 	if (quantity <= portfolio["Moneti"][name]) {
-		portfolio["Balance"]["amount"] += GetAssetPrice(name, "APIKEY") * quantity;
+		std::string current_key = "YOUR_API_KEY";
+		double price = GetAssetPrice(name, current_key);
+
+		if (price <= 0) {
+			std::cout << "Не удалось получить цену актива для совершения сделки.\n\n";
+			return;
+		}
+
+		portfolio["Balance"]["amount"] += static_cast<float>(price * quantity);
 		portfolio["Moneti"][name] -= quantity;
-		std::cout << "Продано " << quantity << " акций " << name << " за " << GetAssetPrice(name, "APIKEY") * quantity << "$" << std::endl;
+		std::cout << "Продано " << quantity << " ед. " << name << " за " << price * quantity << "$" << std::endl;
 		std::cout << "Текущий баланс: " << portfolio["Balance"]["amount"] << "$" << std::endl << std::endl;
-		entry = "Продажа " + std::to_string(quantity) + " " + name + " за " + std::to_string(GetAssetPrice(name, "APIKEY") * quantity) + "$" + " | " + get_real_time();
+		entry = "Продажа " + std::to_string(quantity) + " " + name + " за " + std::to_string(price * quantity) + "$" + " | " + get_real_time();
 		history.push_back(entry);
 		entry = "";
 	}
 	else {
 		std::cout << "В портфеле нет столько акций\n\n";
 	}
-
 }
 
-
+/**
+ * @brief Запрашивает массив исторических цен закрытия для криптовалют с Binance.
+ * @param ticker Код криптовалюты (например, "BTC").
+ * @param days Количество прошедших дней (размер запрашиваемой истории).
+ * @param interval Таймфрейм баров (по умолчанию "1d" — 1 день).
+ * @return Вектор с историческими ценами. Пустой вектор, если произошла ошибка.
+ */
 std::vector<double> GetHistoricalPrices(std::string ticker, int days, const std::string& interval = "1d") {
 	std::transform(ticker.begin(), ticker.end(), ticker.begin(), ::toupper);
 
@@ -256,9 +293,6 @@ std::vector<double> GetHistoricalPrices(std::string ticker, int days, const std:
 
 	if (cryptoMap.find(ticker) != cryptoMap.end()) {
 		std::string symbol = cryptoMap.at(ticker);
-
-		// Binance API для исторических свечей
-		// limit = количество свечей (days)
 		std::string url = "https://api.binance.com/api/v3/klines?symbol=" + symbol
 			+ "&interval=" + interval + "&limit=" + std::to_string(days);
 
@@ -268,7 +302,6 @@ std::vector<double> GetHistoricalPrices(std::string ticker, int days, const std:
 			try {
 				auto js = json::parse(res);
 				for (const auto& candle : js) {
-					// Цена закрытия (4-й элемент в свече) как double
 					double closePrice = std::stod(candle[4].get<std::string>());
 					prices.push_back(closePrice);
 				}
@@ -278,17 +311,23 @@ std::vector<double> GetHistoricalPrices(std::string ticker, int days, const std:
 			}
 		}
 	}
-
 	return prices;
 }
 
-
-
+/**
+ * @brief Изменяет цвет шрифта вывода в консоли Windows.
+ * @param color Числовой код цвета консоли (0-15).
+ */
 void SetColor(int color) {
 	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 	SetConsoleTextAttribute(hConsole, color);
 }
 
+/**
+ * @brief Отрисовывает красивый псевдографик (ASCII-art) истории изменения цены в консоли.
+ * @param prices Константная ссылка на вектор цен.
+ * @param ticker Отображаемый тикер актива на графике.
+ */
 void PrintChart(const std::vector<double>& prices, const std::string& ticker) {
 	if (prices.empty()) {
 		std::cout << "Нет данных\n";
@@ -315,7 +354,7 @@ void PrintChart(const std::vector<double>& prices, const std::string& ticker) {
 			int height = static_cast<int>((prices[i] - minPrice) / range * CHART_HEIGHT);
 
 			if (height >= row) {
-				SetColor(10);  // ОДИН ЦВЕТ ДЛЯ ВСЕХ СТОЛБЦОВ (зеленый)
+				SetColor(10); // Зеленый цвет для графика
 				std::cout << "#";
 			}
 			else {
@@ -325,15 +364,12 @@ void PrintChart(const std::vector<double>& prices, const std::string& ticker) {
 		std::cout << "|\n";
 	}
 
-	// Нижняя граница
-	SetColor(7);
-	std::cout << "          +";
+	std::cout << "         +";
 	for (size_t i = 0; i < prices.size(); i++) {
 		std::cout << "-";
 	}
 	std::cout << "+\n";
 
-	// Подписи дней
 	std::cout << "           ";
 
 	int days_count = (int)prices.size();
@@ -360,8 +396,10 @@ void PrintChart(const std::vector<double>& prices, const std::string& ticker) {
 	std::cout << "\n\n";
 }
 
-
-
+/**
+ * @brief Сохраняет текущие данные портфеля (баланс и монеты) в текстовый файл.
+ * @param filename Путь или имя файла сохранения.
+ */
 void SavePortfolioToFile(const std::string& filename) {
 	std::ofstream file(filename);
 	if (!file) {
@@ -369,10 +407,8 @@ void SavePortfolioToFile(const std::string& filename) {
 		return;
 	}
 
-	// Сохраняем баланс
 	file << portfolio["Balance"]["amount"] << "\n";
 
-	// Сохраняем каждую монету
 	for (const auto& pair : portfolio["Moneti"]) {
 		file << pair.first << " " << pair.second << "\n";
 	}
@@ -381,6 +417,10 @@ void SavePortfolioToFile(const std::string& filename) {
 	std::cout << "Сохранено!\n\n";
 }
 
+/**
+ * @brief Загружает сохраненные данные баланса и активов из файла в программу.
+ * @param filename Путь или имя файла для чтения данных.
+ */
 void LoadPortfolioFromFile(const std::string& filename) {
 	std::ifstream file(filename);
 	if (!file) {
@@ -404,66 +444,70 @@ void LoadPortfolioFromFile(const std::string& filename) {
 	std::cout << "Загружено! Баланс: " << portfolio["Balance"]["amount"] << "$\n\n";
 }
 
-
+/**
+ * @brief Главная точка входа в программу. Реализует цикл бесконечного консольного меню.
+ */
 int main() {
 	setlocale(LC_ALL, "RU");
 	short xray = 0;
+	std::string my_key = "YOUR_API_KEY"; // Укажи сюда свой токен Finnhub, чтобы чекать цену акций
 
-	double price = GetAssetPrice("btc", "API_key");
-	//Цикл чтобы возвращаться в главное меню
+	// Цикл чтобы возвращаться в главное меню
 	while (xray < 10000) {
 		SetColor(14);
 		xray++;
 		std::cout << "ДОБРО ПОЖАЛОВАТЬ В КОНСОЛЬНЫЙ МЕНЕДЖЕР КРИПТОВАЛЮТЫ\n";
 		std::cout << "1. Вывести текущий портфель\n";
-		std::cout << "2. Проверить цену акции\n";
+		std::cout << "2. Проверить цену акции/крипты\n";
 		std::cout << "3. Изменить баланс\n";
-		std::cout << "4. Купить акцию\n";
-		std::cout << "5. Продать акцию\n";
+		std::cout << "4. Купить актив\n";
+		std::cout << "5. Продать актив\n";
 		std::cout << "6. Вывести историю действий\n";
 		std::cout << "7. Вывести график\n";
 		std::cout << "8. Сохранить портфель в файл\n";
 		std::cout << "9. Загрузить портфель из файла\n";
 		std::cout << "10. Выйти из программы\n\n";
+
 		int summa;
 		int a;
 		float quantity;
 		std::string name;
 		std::string filename;
 		std::cin >> a;
+
 		switch (a) {
-		case 2:
-
-			std::cout << "Введите название валюты\n";
-			std::cin >> name;
-			std::cout << "Цена валюты на данный момент: " << GetAssetPrice(name, "APIKEY") << "$" << std::endl << std::endl;
-			std::this_thread::sleep_for(std::chrono::seconds(2));
-			continue;
-
 		case 1:
 			print_portf();
 			std::this_thread::sleep_for(std::chrono::seconds(2));
 			continue;
+
+		case 2:
+			std::cout << "Введите название валюты/акции:\n";
+			std::cin >> name;
+			std::cout << "Цена на данный момент: " << GetAssetPrice(name, my_key) << "$" << std::endl << std::endl;
+			std::this_thread::sleep_for(std::chrono::seconds(2));
+			continue;
+
 		case 3:
-			std::cout << "Введите сумму\n";
+			std::cout << "Введите сумму:\n";
 			std::cin >> summa;
 			balance_change(summa);
 			std::this_thread::sleep_for(std::chrono::seconds(2));
 			continue;
 
 		case 4:
-			std::cout << "Введите название акции для покупки\n";
+			std::cout << "Введите название актива для покупки:\n";
 			std::cin >> name;
-			std::cout << "Введите количество акций\n";
+			std::cout << "Введите количество:\n";
 			std::cin >> quantity;
 			buy_asset(name, quantity);
 			std::this_thread::sleep_for(std::chrono::seconds(2));
 			continue;
 
 		case 5:
-			std::cout << "Введите название акции для продажи\n";
+			std::cout << "Введите название актива для продажи:\n";
 			std::cin >> name;
-			std::cout << "Введите количество акций\n";
+			std::cout << "Введите количество:\n";
 			std::cin >> quantity;
 			sell_asset(name, quantity);
 			std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -474,13 +518,10 @@ int main() {
 			std::this_thread::sleep_for(std::chrono::seconds(2));
 			continue;
 
-		
 		case 7: {
-			std::string name;
 			int days;
-
 			SetColor(7);
-			std::cout << "Введите тикер (BTC, ETH, AAPL, MSFT, NVDA): ";
+			std::cout << "Введите тикер криптовалюты (BTC, ETH, BNB, SOL, XRP): ";
 			std::cin >> name;
 
 			std::cout << "Введите количество дней (5-30): ";
@@ -493,7 +534,6 @@ int main() {
 				continue;
 			}
 
-			// Загрузка
 			SetColor(14);
 			std::cout << "\nЗагрузка данных";
 			for (int i = 0; i < 3; i++) {
@@ -502,7 +542,6 @@ int main() {
 			}
 			std::cout << "\n";
 
-			// Получаем цены
 			std::vector<double> prices = GetHistoricalPrices(name, days);
 
 			if (prices.empty()) {
@@ -512,7 +551,6 @@ int main() {
 				continue;
 			}
 
-			// Показываем цветной график
 			PrintChart(prices, name);
 
 			SetColor(7);
@@ -520,19 +558,17 @@ int main() {
 			std::cin.ignore();
 			std::cin.get();
 			continue;
-		
-
 		}
-		
+
 		case 8:
-			std::cout << "Введите название файла\n";
+			std::cout << "Введите название файла для сохранения:\n";
 			std::cin >> filename;
 			SavePortfolioToFile(filename);
 			std::this_thread::sleep_for(std::chrono::seconds(1));
 			continue;
 
 		case 9:
-			std::cout << "Введите название файла\n";
+			std::cout << "Введите название файла для загрузки:\n";
 			std::cin >> filename;
 			LoadPortfolioFromFile(filename);
 			std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -541,6 +577,7 @@ int main() {
 		case 10:
 			xray = 10000;
 			break;
+		}
 	}
 	return 0;
-}}
+}
