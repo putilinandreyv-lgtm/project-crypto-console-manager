@@ -420,6 +420,7 @@ void LoadPortfolioFromFile(const std::string& filename) {
  * @brief Главная точка входа в программу. Реализует цикл бесконечного консольного меню.
  */
 int main() {
+	setlocale(LC_ALL, "RU");
 	SetConsoleCP(65001);
     SetConsoleOutputCP(65001);
 	short xray = 0;
