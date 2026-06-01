@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.15)
 
+# [ВАЖНО] Если вы хотите, чтобы CMake сразу увидел установленный через vcpkg curl,
+# раскомментируйте строчку ниже и укажите правильный путь к вашему vcpkg.cmake:
+# set(CMAKE_TOOLCHAIN_FILE "C:/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "vcpkg toolchain")
+
 # 1. Имя проекта и язык
 project("project-crypto-console-manager" LANGUAGES CXX)
 
@@ -47,6 +51,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(curl)
 
+# Создаем удобный алиас (псевдоним), чтобы код работал одинаково 
+# и при скачивании из Git, и при нахождении через vcpkg/ find_package
+if(NOT TARGET CURL::libcurl)
+    if(TARGET libcurl_shared)
+        add_library(CURL::libcurl ALIAS libcurl_shared)
+    elseif(TARGET libcurl_static)
+        add_library(CURL::libcurl ALIAS libcurl_static)
+    endif()
+endif()
+
 # -----------------------------------------------------------------------------
 # 4. Создание основного исполняемого файла проекта
 # -----------------------------------------------------------------------------
@@ -56,7 +70,7 @@ add_executable(${PROJECT_NAME} ConsoleApplication1.cpp)
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
         nlohmann_json::nlohmann_json
-        libcurl
+        CURL::libcurl  # <- Используем правильный таргет
 )
 
 # -----------------------------------------------------------------------------
@@ -84,7 +98,7 @@ target_link_libraries(run_tests
     PRIVATE
         doctest::doctest
         nlohmann_json::nlohmann_json
-        libcurl
+        CURL::libcurl  # <- Используем правильный таргет
 )
 
 # Регистрация тестового файла в движке ctest
