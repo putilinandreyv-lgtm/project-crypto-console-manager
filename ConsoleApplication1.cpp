@@ -271,24 +271,49 @@ std::vector<double> GetHistoricalPrices(std::string ticker, int days, const std:
 
 	std::vector<double> prices;
 
-	if (cryptoMap.find(ticker) != cryptoMap.end()) {
-		std::string symbol = cryptoMap.at(ticker);
-		std::string url = "https://api.binance.com/api/v3/klines?symbol=" + symbol
-			+ "&interval=" + interval + "&limit=" + std::to_string(days);
+	// ПРОВЕРКА НА СУЩЕСТВУЮЩИЙ ТИКЕР
+	auto it = cryptoMap.find(ticker);
+	if (it == cryptoMap.end()) {
+		return {};
+	}
+	std::string symbol = it->second;
 
-		std::string res = NetworkHttpGet(url);
+	std::string url = "https://api.binance.com/api/v3/klines?symbol=" + symbol
+		+ "&interval=" + interval + "&limit=" + std::to_string(days);
 
-		if (!res.empty()) {
-			try {
-				auto js = json::parse(res);
-				for (const auto& candle : js) {
-					double closePrice = std::stod(candle[4].get<std::string>());
-					prices.push_back(closePrice);
+	std::string res = NetworkHttpGet(url);
+
+	if (!res.empty()) {
+		try {
+			auto js = json::parse(res);
+			for (const auto& candle : js) {
+				// ПРОВЕРКА НА ТИП ПЕРЕМЕННЫХ
+				if (candle.size() < 5) {
+					continue;
 				}
+
+				// Безопасное получение цены
+				double closePrice = 0.0;
+				try {
+					// Цена может быть либо строкой, либо числом
+					if (candle[4].is_string()) {
+						closePrice = std::stod(candle[4].get<std::string>());
+					}
+					else if (candle[4].is_number()) {
+						closePrice = candle[4].get<double>();
+					}
+					else {
+						continue;  // неверный тип, пропускаем
+					}
+				}
+				catch (...) {
+					continue;  // ошибка преобразования, пропускаем
+				}
+				prices.push_back(closePrice);
 			}
-			catch (...) {
-				std::cerr << "Ошибка парсинга исторических данных для " << ticker << std::endl;
-			}
+		}
+		catch (...) {
+			// тихо игнорируем ошибку
 		}
 	}
 	return prices;
@@ -506,13 +531,39 @@ int main() {
 			std::cout << "Введите тикер криптовалюты (BTC, ETH, BNB, SOL, XRP): ";
 			std::cin >> name;
 
-			std::cout << "Введите количество дней (5-30): ";
-			std::cin >> days;
+			
+			std::string tickerCheck = name;
+			std::transform(tickerCheck.begin(), tickerCheck.end(), tickerCheck.begin(), ::toupper);
 
+			static const std::unordered_map<std::string, std::string> cryptoCheck = {
+				{"BTC", "BTCUSDT"}, {"ETH", "ETHUSDT"}, {"BNB", "BNBUSDT"},
+				{"SOL", "SOLUSDT"}, {"XRP", "XRPUSDT"}
+			};
+
+			if (cryptoCheck.find(tickerCheck) == cryptoCheck.end()) {
+				SetColor(12);
+				std::cout << "Ошибка: тикер '" << name << "' не поддерживается! Доступны: BTC, ETH, BNB, SOL, XRP\n";
+				SetColor(7);
+				std::this_thread::sleep_for(std::chrono::seconds(2));
+				continue;
+			}
+
+			
+			std::cout << "Введите количество дней (1-30): \n";
+			while (!(std::cin >> days)) {
+				std::cin.clear();
+				std::cin.ignore(32767, '\n');
+				SetColor(12);
+				std::cout << "Ошибка! Введите число\n";
+				SetColor(7);
+			}
+
+			
 			if (days < 1 || days > 30) {
 				SetColor(12);
-				std::cout << "Ошибка: количество дней должно быть от 1 до 30!\n";
+				std::cout << "Ошибка: количество дней должно быть от 1 до 30! (вы ввели " << days << ")\n";
 				SetColor(7);
+				std::this_thread::sleep_for(std::chrono::seconds(2));
 				continue;
 			}
 
@@ -536,7 +587,7 @@ int main() {
 			PrintChart(prices, name);
 
 			SetColor(7);
-			std::cout << "Нажмите Enter для продолжения...\n";
+			std::cout << "\nНажмите Enter для продолжения...";
 			std::cin.ignore();
 			std::cin.get();
 			continue;
