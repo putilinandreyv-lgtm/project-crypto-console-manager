@@ -188,6 +188,10 @@ void buy_asset(std::string name, float quantity) {
 		std::cout << "Ошибка: Актив '" << name << "' не поддерживается!\n\n";
 		return;
 	}
+	if (quantity < 0 || quantity == 0) {
+		std::cout << "Введите положительное число\n\n";
+		return;
+	}
 
 	double price = GetAssetPrice(name);
 
@@ -226,7 +230,8 @@ void sell_asset(std::string name, float quantity) {
 	}
 
 	if (quantity < 0){
-		std::cout << "Введите положительное число";
+		std::cout << "Введите положительное число\n\n";
+		return;
 	}
 	else if (quantity <= portfolio["Moneti"][name]) {
 		double price = GetAssetPrice(name);
