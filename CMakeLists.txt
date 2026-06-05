@@ -59,8 +59,8 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(doctest)
 
-add_executable(run_tests tests.cpp)
-
+add_executable(run_tests tests.cpp ConsoleApplication1.cpp)
+target_compile_definitions(run_tests PRIVATE TEST_BUILD)
 target_link_libraries(run_tests
     PRIVATE
         doctest::doctest

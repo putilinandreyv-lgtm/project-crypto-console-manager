@@ -1,159 +1,131 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 #include <unordered_map>
-#include <string>
 #include <vector>
-#include <algorithm>
+#include <string>
+#include <fstream>
+#include <cstdio>
 
-// Имитируем структуру портфеля внутри тестов для изоляции бизнес-логики
-std::unordered_map<std::string, std::unordered_map<std::string, float>> test_portfolio = {
-    {"Balance", {{"amount", 10000.0f}}},
-    {"Moneti", {
+extern std::unordered_map<std::string, std::unordered_map<std::string, float>> portfolio;
+extern std::vector<std::string> history;
+
+void LoadPortfolioFromFile(const std::string& filename);
+void balance_change(int summa);
+double GetAssetPrice(std::string ticker);
+void buy_asset(std::string name, float quantity);
+void sell_asset(std::string name, float quantity);
+std::vector<double> GetHistoricalPrices(std::string ticker, int days, const std::string& interval = "1d");
+
+void ResetPortfolio() {
+    portfolio["Balance"]["amount"] = 10000.0f;
+    portfolio["Moneti"] = {
         {"BTC", 0.0f}, {"ETH", 0.0f}, {"BNB", 0.0f}, {"SOL", 0.0f}, {"XRP", 0.0f}
-    }}
-};
-
-// ============================================================================
-// ТЕСТИРУЕМЫЕ ФУНКЦИИ (6 штук с чистой логикой из твоего ТЗ)
-// ============================================================================
-
-// 1. Валидация поддерживаемых тикеров
-bool is_supported_ticker(std::string ticker) {
-    std::transform(ticker.begin(), ticker.end(), ticker.begin(), ::toupper);
-    return (ticker == "BTC" || ticker == "ETH" || ticker == "BNB" || ticker == "SOL" || ticker == "XRP");
+    };
+    history.clear();
 }
 
-// 2. Расчет стоимости отдельного актива
-double calculate_asset_value(double amount, double price) {
-    if (amount <= 0 || price <= 0) return 0.0;
-    return amount * price;
-}
+TEST_SUITE("Crypto Portfolio Manager Tests") {
 
-// 3. Валидация диапазона дней для графиков
-bool is_valid_days_range(int days) {
-    return (days >= 1 && days <= 30);
-}
+    TEST_CASE("1. Testing LoadPortfolioFromFile") {
+        ResetPortfolio();
+        std::string test_filename = "test_portfolio.txt";
 
-// 4. Логика изменения баланса (без cout/cin)
-bool process_balance_change(float current_balance, int summa, float& out_balance) {
-    if (current_balance + summa >= 0) {
-        out_balance = current_balance + summa;
-        return true;
+        std::ofstream test_file(test_filename);
+        test_file << "5500.50\n";
+        test_file << "BTC 1.25\n";
+        test_file << "ETH 4.0\n";
+        test_file.close();
+
+        LoadPortfolioFromFile(test_filename);
+        CHECK(portfolio["Balance"]["amount"] == doctest::Approx(5500.50f));
+        CHECK(portfolio["Moneti"]["BTC"] == doctest::Approx(1.25f));
+        CHECK(portfolio["Moneti"]["ETH"] == doctest::Approx(4.0f));
+
+        ResetPortfolio();
+        LoadPortfolioFromFile("missing_file.txt");
+        CHECK(portfolio["Balance"]["amount"] == 10000.0f);
+
+        std::remove(test_filename.c_str());
     }
-    out_balance = current_balance;
-    return false;
-}
 
-// 5. Логика списания фиата и начисления монет при покупке
-bool process_buy_asset(const std::string& coin, float quantity, double price, float& fiat_balance, float& coin_balance) {
-    if (price <= 0 || quantity <= 0) return false;
-    double total_cost = price * quantity;
-    if (total_cost <= fiat_balance) {
-        fiat_balance -= static_cast<float>(total_cost);
-        coin_balance += quantity;
-        return true;
-    }
-    return false;
-}
+    TEST_CASE("2. Testing balance_change") {
+        ResetPortfolio();
 
-// 6. Логика начисления фиата и списания монет при продаже
-bool process_sell_asset(const std::string& coin, float quantity, double price, float& fiat_balance, float& coin_balance) {
-    if (price <= 0 || quantity <= 0) return false;
-    if (quantity <= coin_balance) {
-        fiat_balance += static_cast<float>(price * quantity);
-        coin_balance -= quantity;
-        return true;
-    }
-    return false;
-}
+        balance_change(1500);
+        CHECK(portfolio["Balance"]["amount"] == 11500.0f);
+        
+        balance_change(-50000); 
+        CHECK(portfolio["Balance"]["amount"] == 11500.0f); 
 
-// ============================================================================
-// БЛОК ТЕСТОВ (Покрывает И положительные, И отрицательные исходы для 3 баллов)
-// ============================================================================
+        balance_change(0); 
+        CHECK(portfolio["Balance"]["amount"] == 11500.0f); 
+    }
 
-TEST_CASE("1. Функция валидации тикеров криптовалют") {
-    SUBCASE("Положительные исходы (Верхний и нижний регистр)") {
-        CHECK(is_supported_ticker("BTC") == true);
-        CHECK(is_supported_ticker("sol") == true); 
-        CHECK(is_supported_ticker("ETH") == true);
-    }
-    SUBCASE("Отрицательные исходы (Неподдерживаемые или пустые)") {
-        CHECK(is_supported_ticker("INVALID") == false);
-        CHECK(is_supported_ticker("AAPL") == false);
-        CHECK(is_supported_ticker("") == false);
-    }
-}
+    // 3. ТЕСТ: GetAssetPrice
+    TEST_CASE("3. Testing GetAssetPrice") {
+        double price_upper = GetAssetPrice("BTC");
+        double price_lower = GetAssetPrice("btc");
+        
+        if (price_upper > 0.0) {
+            CHECK(price_upper > 0.0);
+            CHECK(price_lower > 0.0);
+            CHECK(price_upper == doctest::Approx(price_lower).epsilon(0.01));
+        }
 
-TEST_CASE("2. Функция расчета стоимости актива") {
-    SUBCASE("Положительные исходы (Корректный расчет стоимости)") {
-        CHECK(calculate_asset_value(2.5, 100.0) == doctest::Approx(250.0));
-        CHECK(calculate_asset_value(0.1, 50000.0) == doctest::Approx(5000.0));
+        CHECK(GetAssetPrice("INVALID") == -1.0);
     }
-    SUBCASE("Отрицательные исходы (Невалидные параметры дают 0)") {
-        CHECK(calculate_asset_value(-1.0, 100.0) == doctest::Approx(0.0));
-        CHECK(calculate_asset_value(5.0, -10.0) == doctest::Approx(0.0));
-        CHECK(calculate_asset_value(0.0, 150.0) == doctest::Approx(0.0));
-    }
-}
 
-TEST_CASE("3. Функция валидации лимита дней (1-30)") {
-    SUBCASE("Положительные исходы (Внутри допустимых границ)") {
-        CHECK(is_valid_days_range(1) == true);
-        CHECK(is_valid_days_range(15) == true);
-        CHECK(is_valid_days_range(30) == true);
-    }
-    SUBCASE("Отрицательные исходы (Выход за границы)") {
-        CHECK(is_valid_days_range(0) == false);
-        CHECK(is_valid_days_range(31) == false);
-        CHECK(is_valid_days_range(-5) == false);
-    }
-}
+    // 4. ТЕСТ: buy_asset
+    TEST_CASE("4. Testing buy_asset") {
+        ResetPortfolio();
+        double btc_price = GetAssetPrice("BTC");
 
-TEST_CASE("4. Модуль изменения фиатного баланса") {
-    float current_fiat = 10000.0f;
-    float updated_fiat = 0.0f;
+        if (btc_price > 0.0) {
+            buy_asset("BTC", 0.1f);
+            CHECK(portfolio["Moneti"]["BTC"] == 0.1f);
+        }
 
-    SUBCASE("Положительный исход: Успешное пополнение и списание") {
-        CHECK(process_balance_change(current_fiat, 500, updated_fiat) == true);
-        CHECK(updated_fiat == doctest::Approx(10500.0f));
+        ResetPortfolio();
+        buy_asset("BTC", 500.0f); 
+        CHECK(portfolio["Moneti"]["BTC"] == 0.0f);
+        CHECK(portfolio["Balance"]["amount"] == 10000.0f);
 
-        CHECK(process_balance_change(current_fiat, -5000, updated_fiat) == true);
-        CHECK(updated_fiat == doctest::Approx(5000.0f));
+        ResetPortfolio();
+        buy_asset("BTC", -1.0f); 
+        CHECK(portfolio["Moneti"]["BTC"] == 0.0f);
+        CHECK(portfolio["Balance"]["amount"] == 10000.0f);
     }
-    SUBCASE("Отрицательный исход: Попытка списать больше, чем есть (баланс не меняется)") {
-        CHECK(process_balance_change(current_fiat, -20000, updated_fiat) == false);
-        CHECK(updated_fiat == doctest::Approx(10000.0f));
-    }
-}
 
-TEST_CASE("5. Модуль логики покупки активов") {
-    float fiat = 10000.0f;
-    float btc_amount = 0.0f;
+    TEST_CASE("5. Testing sell_asset") {
+        ResetPortfolio();
+        portfolio["Moneti"]["ETH"] = 2.0f; 
+        double eth_price = GetAssetPrice("ETH");
 
-    SUBCASE("Положительный исход: Достаточно средств для покупки") {
-        // Покупаем 0.1 BTC по цене 50000$ (Всего 5000$)
-        CHECK(process_buy_asset("BTC", 0.1f, 50000.0, fiat, btc_amount) == true);
-        CHECK(btc_amount == doctest::Approx(0.1f));
-        CHECK(fiat == doctest::Approx(5000.0f));
-    }
-    SUBCASE("Отрицательный исход: Цена невалидна или баланса не хватает") {
-        CHECK(process_buy_asset("BTC", 1.0f, 60000.0, fiat, btc_amount) == false); // Не хватит денег
-        CHECK(process_buy_asset("BTC", 0.1f, -1000.0, fiat, btc_amount) == false); // Кривая цена
-    }
-}
+        if (eth_price > 0.0) {
+            sell_asset("ETH", 1.0f);
+            CHECK(portfolio["Moneti"]["ETH"] == 1.0f);
+        }
 
-TEST_CASE("6. Модуль логики продажи активов") {
-    float fiat = 5000.0f;
-    float btc_amount = 0.5f;
+        ResetPortfolio();
+        portfolio["Moneti"]["ETH"] = 0.5f;
+        sell_asset("ETH", 10.0f);
+        CHECK(portfolio["Moneti"]["ETH"] == 0.5f);
 
-    SUBCASE("Положительный исход: Успешная продажа имеющегося объема") {
-        // Продаем 0.2 BTC по цене 50000$ (Получаем 10000$)
-        CHECK(process_sell_asset("BTC", 0.2f, 50000.0, fiat, btc_amount) == true);
-        CHECK(btc_amount == doctest::Approx(0.3f));
-        CHECK(fiat == doctest::Approx(15000.0f));
+        ResetPortfolio();
+        portfolio["Moneti"]["ETH"] = 0.5f;
+        sell_asset("ETH", -1.0f);
+        CHECK(portfolio["Moneti"]["ETH"] == 0.5f);
     }
-    SUBCASE("Отрицательный исход: Попытка продать больше, чем есть на руках") {
-        CHECK(process_sell_asset("BTC", 1.0f, 50000.0, fiat, btc_amount) == false);
-        CHECK(btc_amount == doctest::Approx(0.5f)); // Объем не изменился
+
+    TEST_CASE("6. Testing GetHistoricalPrices") {
+        int requested_days = 5;
+        std::vector<double> prices = GetHistoricalPrices("BTC", requested_days);
+        
+        if (!prices.empty()) {
+            CHECK(prices.size() == static_cast<size_t>(requested_days));
+        }
+
+        std::vector<double> empty_prices = GetHistoricalPrices("FAKE", 5);
+        CHECK(empty_prices.empty() == true);
     }
 }

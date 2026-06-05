@@ -225,7 +225,10 @@ void sell_asset(std::string name, float quantity) {
 		return;
 	}
 
-	if (quantity <= portfolio["Moneti"][name]) {
+	if (quantity < 0){
+		std::cout << "Введите положительное число";
+	}
+	else if (quantity <= portfolio["Moneti"][name]) {
 		double price = GetAssetPrice(name);
 
 		if (price <= 0) {
@@ -419,6 +422,7 @@ void LoadPortfolioFromFile(const std::string& filename) {
 /**
  * @brief Главная точка входа в программу. Реализует цикл бесконечного консольного меню.
  */
+#ifndef TEST_BUILD
 int main() {
 	setlocale(LC_ALL, "RU");
 	SetConsoleCP(65001);
@@ -554,3 +558,4 @@ int main() {
 	}
 	return 0;
 }
+#endif
