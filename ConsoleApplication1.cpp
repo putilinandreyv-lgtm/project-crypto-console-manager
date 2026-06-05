@@ -271,7 +271,7 @@ std::vector<double> GetHistoricalPrices(std::string ticker, int days, const std:
 
 	std::vector<double> prices;
 
-	// ПРОВЕРКА НА СУЩЕСТВУЮЩИЙ ТИКЕР
+	
 	auto it = cryptoMap.find(ticker);
 	if (it == cryptoMap.end()) {
 		return {};
@@ -287,15 +287,15 @@ std::vector<double> GetHistoricalPrices(std::string ticker, int days, const std:
 		try {
 			auto js = json::parse(res);
 			for (const auto& candle : js) {
-				// ПРОВЕРКА НА ТИП ПЕРЕМЕННЫХ
+				
 				if (candle.size() < 5) {
 					continue;
 				}
 
-				// Безопасное получение цены
+				
 				double closePrice = 0.0;
 				try {
-					// Цена может быть либо строкой, либо числом
+					
 					if (candle[4].is_string()) {
 						closePrice = std::stod(candle[4].get<std::string>());
 					}
@@ -303,17 +303,17 @@ std::vector<double> GetHistoricalPrices(std::string ticker, int days, const std:
 						closePrice = candle[4].get<double>();
 					}
 					else {
-						continue;  // неверный тип, пропускаем
+						continue; 
 					}
 				}
 				catch (...) {
-					continue;  // ошибка преобразования, пропускаем
+					continue;  
 				}
 				prices.push_back(closePrice);
 			}
 		}
 		catch (...) {
-			// тихо игнорируем ошибку
+			
 		}
 	}
 	return prices;
@@ -454,7 +454,7 @@ void LoadPortfolioFromFile(const std::string& filename) {
  */
 #ifndef TEST_BUILD
 int main() {
-	//setlocale(LC_ALL, "RU");
+	setlocale(LC_ALL, "RU");
 	SetConsoleCP(65001);
     SetConsoleOutputCP(65001);
 	short xray = 0;
@@ -549,7 +549,7 @@ int main() {
 			}
 
 			
-			std::cout << "Введите количество дней (1-30): \n";
+			std::cout << "Введите количество дней (5-30): \n";
 			while (!(std::cin >> days)) {
 				std::cin.clear();
 				std::cin.ignore(32767, '\n');
@@ -559,9 +559,9 @@ int main() {
 			}
 
 			
-			if (days < 1 || days > 30) {
+			if (days < 5 || days > 30) {
 				SetColor(12);
-				std::cout << "Ошибка: количество дней должно быть от 1 до 30! (вы ввели " << days << ")\n";
+				std::cout << "Ошибка: количество дней должно быть от 5 до 30! (вы ввели " << days << ")\n";
 				SetColor(7);
 				std::this_thread::sleep_for(std::chrono::seconds(2));
 				continue;
