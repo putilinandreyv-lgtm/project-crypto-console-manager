@@ -118,14 +118,16 @@ TEST_SUITE("Crypto Portfolio Manager Tests") {
     }
 
     TEST_CASE("6. Testing GetHistoricalPrices") {
-        int requested_days = 5;
-        std::vector<double> prices = GetHistoricalPrices("BTC", requested_days);
+        std::vector<double> prices = GetHistoricalPrices("BTC", 5);
         
         if (!prices.empty()) {
-            CHECK(prices.size() == static_cast<size_t>(requested_days));
+            CHECK(prices.size() == static_cast<size_t>(5));
         }
 
         std::vector<double> empty_prices = GetHistoricalPrices("FAKE", 5);
         CHECK(empty_prices.empty() == true);
+
+        std::vector<double> emptyy = GetHistoricalPrices("BTC", 0);
+        CHECK(emptyy.empty() == true);
     }
 }

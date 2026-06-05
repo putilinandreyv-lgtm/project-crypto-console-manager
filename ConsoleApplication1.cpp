@@ -454,7 +454,7 @@ void LoadPortfolioFromFile(const std::string& filename) {
  */
 #ifndef TEST_BUILD
 int main() {
-	setlocale(LC_ALL, "RU");
+	//setlocale(LC_ALL, "RU");
 	SetConsoleCP(65001);
     SetConsoleOutputCP(65001);
 	short xray = 0;
