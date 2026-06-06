@@ -454,7 +454,7 @@ void LoadPortfolioFromFile(const std::string& filename) {
  */
 #ifndef TEST_BUILD
 int main() {
-	setlocale(LC_ALL, "RU");
+	//setlocale(LC_ALL, "RU");
 	SetConsoleCP(65001);
     SetConsoleOutputCP(65001);
 	short xray = 0;
@@ -480,7 +480,17 @@ int main() {
 		float quantity;
 		std::string name;
 		std::string filename;
-		std::cin >> a;
+		if (!(std::cin >> a)) {
+            SetColor(12);
+            std::cout << "\nОшибка! Введите корректное число (пункт меню), а не буквы!\n\n";
+            SetColor(14);
+            
+            std::cin.clear();
+            std::cin.ignore(32767, '\n');
+            
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            continue;
+        }
 
 		switch (a) {
 		case 1:
@@ -503,22 +513,40 @@ int main() {
 			continue;
 
 		case 4:
-			std::cout << "Введите название актива для покупки:\n";
-			std::cin >> name;
-			std::cout << "Введите количество:\n";
-			std::cin >> quantity;
-			buy_asset(name, quantity);
-			std::this_thread::sleep_for(std::chrono::seconds(2));
-			continue;
+  			std::cout << "Введите название актива для покупки:\n";
+  			std::cin >> name;
+  			std::cout << "Введите количество:\n";
+
+  
+  			while (!(std::cin >> quantity)) {
+    			std::cin.clear();            
+    			std::cin.ignore(32767, '\n'); 
+    			SetColor(12);                 
+    			std::cout << "Ошибка! Введите корректное число для количества:\n";
+    			SetColor(14);                
+  			}
+
+  			buy_asset(name, quantity);
+  			std::this_thread::sleep_for(std::chrono::seconds(2));
+  			continue;
 
 		case 5:
-			std::cout << "Введите название актива для продажи:\n";
-			std::cin >> name;
-			std::cout << "Введите количество:\n";
-			std::cin >> quantity;
-			sell_asset(name, quantity);
-			std::this_thread::sleep_for(std::chrono::seconds(2));
-			continue;
+  			std::cout << "Введите название актива для продажи:\n";
+  			std::cin >> name;
+  			std::cout << "Введите количество:\n";
+
+  
+  			while (!(std::cin >> quantity)) {
+    			std::cin.clear();            
+    			std::cin.ignore(32767, '\n');
+    			SetColor(12);
+    			std::cout << "Ошибка! Введите корректное число для количества:\n";
+    			SetColor(14);
+  			}
+
+  			sell_asset(name, quantity);
+  			std::this_thread::sleep_for(std::chrono::seconds(2));
+  			continue;
 
 		case 6:
 			print_history();
@@ -610,6 +638,14 @@ int main() {
 		case 10:
 			xray = 10000;
 			break;
+		
+
+		default:
+            SetColor(12);
+            std::cout << "\nОшибка! Пункта " << a << " не существует. Выберите от 1 до 10.\n\n";
+            SetColor(14);
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            continue;
 		}
 	}
 	return 0;

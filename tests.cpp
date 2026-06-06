@@ -94,6 +94,11 @@ TEST_SUITE("Crypto Portfolio Manager Tests") {
         buy_asset("BTC", -1.0f); 
         CHECK(portfolio["Moneti"]["BTC"] == 0.0f);
         CHECK(portfolio["Balance"]["amount"] == 10000.0f);
+
+        ResetPortfolio();
+        buy_asset("fdsfsd", -1.0f); 
+        CHECK(portfolio["Moneti"]["fdsfsd"] == 0.0f);
+        CHECK(portfolio["Balance"]["amount"] == 10000.0f);
     }
 
     TEST_CASE("5. Testing sell_asset") {
